@@ -1,0 +1,59 @@
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  enable:
+    # Core
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+
+    # Security
+    - gosec
+    - forcetypeassert
+
+    # Reliability & Logic
+    - errorlint
+    - nilnil
+    - nilerr
+    - durationcheck
+    - makezero
+    - sqlclosecheck
+    - rowserrcheck
+    - contextcheck
+
+    # Quality & Modernity
+    - modernize
+    - gocritic
+    - unparam
+    - unconvert
+    - prealloc
+
+    # Tests
+    - testifylint
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  exclusions:
+    generated: lax
+    rules:
+      # Сгенерированные моки mockery не участвуют в линте.
+      - path: (^|/)mocks/
+        linters:
+          - errcheck
+          - unused
+          - gocritic
+          - forcetypeassert
+          - gosec
+          - staticcheck

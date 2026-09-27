@@ -1,0 +1,33 @@
+# env file
+.env
+
+# Binaries and build output
+build/
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+
+# Test and coverage artifacts
+*.out
+coverage.*
+*.coverprofile
+profile.cov
+
+# Go workspace
+go.work
+go.work.sum
+
+# Editor/IDE
+.idea/
+.vscode/
+.zed/
+
+# Local data
+data/
+*.db
+*.db-shm
+*.db-wal

@@ -1,0 +1,65 @@
+name: maxrent
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: maxrent-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-maxrent}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-maxrent}
+      POSTGRES_DB: ${DB_NAME:-maxrent}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-maxrent} -d ${DB_NAME:-maxrent}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  migrate:
+    image: migrate/migrate:v4.18.3
+    container_name: maxrent-migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./migrations:/migrations:ro
+    command:
+      - -path=/migrations
+      - -database=postgres://${DB_USER:-maxrent}:${DB_PASSWORD:-maxrent}@postgres:5432/${DB_NAME:-maxrent}?sslmode=disable
+      - up
+
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BUILD_TIME: ${BUILD_TIME:-unknown}
+    container_name: maxrent-bot
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      APP_ENV: ${APP_ENV:-prod}
+      APP_LOG_LEVEL: ${APP_LOG_LEVEL:-INFO}
+      APP_POLLING_INTERVAL: ${APP_POLLING_INTERVAL:-5s}
+      APP_SHUTDOWN_TIMEOUT: ${APP_SHUTDOWN_TIMEOUT:-15s}
+      DB_URL: postgres://${DB_USER:-maxrent}:${DB_PASSWORD:-maxrent}@postgres:5432/${DB_NAME:-maxrent}?sslmode=disable
+      DB_MAX_OPEN_CONNS: ${DB_MAX_OPEN_CONNS:-10}
+      DB_MAX_IDLE_CONNS: ${DB_MAX_IDLE_CONNS:-5}
+      DB_CONN_MAX_LIFETIME: ${DB_CONN_MAX_LIFETIME:-1h}
+      DB_CONN_MAX_IDLE_TIME: ${DB_CONN_MAX_IDLE_TIME:-5m}
+      BOT_TOKEN: ${BOT_TOKEN:-}
+    env_file:
+      - path: .env
+        required: false
+
+volumes:
+  postgres-data:

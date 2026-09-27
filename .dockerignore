@@ -1,0 +1,17 @@
+# Build
+build/
+bin/
+.git/
+.github/
+
+# Env
+.env
+
+# Docs & assets
+assets/
+
+# Go
+vendor/
+*.test
+*.out
+coverage.*
