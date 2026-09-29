@@ -10,6 +10,7 @@ require (
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/joho/godotenv v1.5.1
 	github.com/lmittmann/tint v1.2.0
+	github.com/max-messenger/max-bot-api-client-go/v2 v2.4.1
 	github.com/stretchr/testify v1.12.1
 )
 

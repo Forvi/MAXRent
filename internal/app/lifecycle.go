@@ -27,9 +27,9 @@ func Run(ctx context.Context, application *App) error {
 	}
 }
 
-// start Запускает цикл опроса апдейтов.
+// start Запускает цикл long polling.
 func (a *App) start(ctx context.Context) error {
-	a.logger.Info("application started", "poll_interval", a.cfg.App.PollingInterval)
+	a.logger.Info("application started", "polling_timeout", a.cfg.Bot.PollingTimeout)
 	return a.poller.Run(ctx)
 }
 

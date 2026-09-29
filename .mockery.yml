@@ -6,3 +6,4 @@ packages:
   github.com/Forvi/maxrent/internal/features/user/ports:
     interfaces:
       UserWriter:
+      MessageSender:

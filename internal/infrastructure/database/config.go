@@ -10,7 +10,8 @@ import (
 // Config Конфигурация подключения к БД.
 type Config struct {
 	// URL строка подключения.
-	URL string `env:"URL,required"`
+	// notEmpty вместо required: required пропускает пустое значение (DB_URL=).
+	URL string `env:"URL,notEmpty"`
 	// MaxOpenConns максимум открытых соединений в пуле.
 	MaxOpenConns int `env:"MAX_OPEN_CONNS" envDefault:"10"`
 	// MaxIdleConns максимум простаивающих соединений в пуле.

@@ -9,6 +9,7 @@ import (
 	"github.com/caarlos0/env/v11"
 	"github.com/joho/godotenv"
 
+	"github.com/Forvi/maxrent/internal/infrastructure/bot"
 	"github.com/Forvi/maxrent/internal/infrastructure/database"
 	"github.com/Forvi/maxrent/internal/infrastructure/logger"
 )
@@ -16,6 +17,7 @@ import (
 // Config Агрегирует конфигурации всех подсистем приложения.
 type Config struct {
 	App    *AppConfig
+	Bot    *bot.Config
 	DB     *database.Config
 	Logger *logger.Config
 }
@@ -25,8 +27,6 @@ type AppConfig struct {
 	// Env окружение: dev или prod. Единственный источник APP_ENV —
 	// логгер берёт его отсюда, а не разбирает переменную повторно.
 	Env string `env:"ENV" envDefault:"dev"`
-	// PollingInterval интервал опроса апдейтов бота.
-	PollingInterval time.Duration `env:"POLLING_INTERVAL" envDefault:"5s"`
 	// ShutdownTimeout таймаут graceful shutdown.
 	ShutdownTimeout time.Duration `env:"SHUTDOWN_TIMEOUT" envDefault:"15s"`
 }
@@ -51,8 +51,14 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("load database config: %w", err)
 	}
 
+	botCfg, err := bot.LoadConfig()
+	if err != nil {
+		return nil, fmt.Errorf("load bot config: %w", err)
+	}
+
 	return &Config{
 		App:    appCfg,
+		Bot:    botCfg,
 		DB:     dbCfg,
 		Logger: logCfg,
 	}, nil

@@ -48,7 +48,7 @@ issues:
   exclusions:
     generated: lax
     rules:
-      # Сгенерированные моки mockery не участвуют в линте.
+      # mockery mocks не учитываются
       - path: (^|/)mocks/
         linters:
           - errcheck

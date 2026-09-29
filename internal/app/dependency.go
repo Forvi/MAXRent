@@ -2,30 +2,44 @@ package app
 
 import (
 	"context"
+	"fmt"
+	"log/slog"
+	"os"
 
+	useradapters "github.com/Forvi/maxrent/internal/features/user/adapters"
+	userhandlers "github.com/Forvi/maxrent/internal/features/user/handlers"
+	userservice "github.com/Forvi/maxrent/internal/features/user/service"
+	"github.com/Forvi/maxrent/internal/infrastructure/bot"
 	"github.com/Forvi/maxrent/internal/infrastructure/config"
 	"github.com/Forvi/maxrent/internal/infrastructure/database"
 	"github.com/Forvi/maxrent/internal/infrastructure/logger"
-	"github.com/Forvi/maxrent/internal/infrastructure/polling"
 )
 
-// BuildApp Явно инициализирует инфраструктуру и фичи.
-// Каждая зависимость создаётся здесь и передаётся дальше по цепочке.
+// BuildApp Инициализирует инфраструктуру и фичи.
 func BuildApp(ctx context.Context, cfg *config.Config) *App {
-	// Logger
+	// Логгер
 	log := logger.NewLogger(cfg.Logger, cfg.App.Env)
 	log.Info("configuration loaded", "env", cfg.App.Env, "log_level", cfg.Logger.Level)
 
-	// DB
+	// Клиент бота
+	botClient, err := bot.NewClient(ctx, cfg.Bot, log)
+	if err != nil {
+		log.Error("failed to init bot client", "err", err)
+		exit(log, err)
+	}
+
+	// База данных
 	db := database.ConnectMust(ctx, cfg.DB, log)
 
-	// Features
-	//	userRepo := useradapters.NewUserRepository(db, log)
-	//	createUser := userservice.NewCreateUser(userRepo, log)
-	//	userHandler := userhandlers.NewUserHandler(createUser, log)
+	// Фичи
+	userRepo := useradapters.NewUserRepository(db, log)
+	createUser := userservice.NewCreateUser(userRepo, log)
+	handlers := []bot.Handler{
+		userhandlers.NewUserHandler(createUser, botClient, log),
+	}
 
-	// Цикл опроса апдейтов (заглушка, далее - клиент мессенджера)
-	poller := polling.NewPoller(cfg.App.PollingInterval, db, log)
+	// Цикл long polling
+	poller := bot.NewPoller(botClient, log, handlers...)
 
 	return &App{
 		cfg:             cfg,
@@ -34,4 +48,11 @@ func BuildApp(ctx context.Context, cfg *config.Config) *App {
 		poller:          poller,
 		shutdownTimeout: cfg.App.ShutdownTimeout,
 	}
+}
+
+// exit Логирует ошибку и завершает процесс с ненулевым кодом.
+func exit(log *slog.Logger, err error) {
+	log.Error("application build failed", "err", err)
+	_, _ = fmt.Fprint(os.Stderr, "application build failed: ", err, "\n")
+	os.Exit(1)
 }

@@ -1,2 +1,1 @@
-# Сгенерированные моки не должны шуметь в диффы и ревью.
 internal/features/*/ports/mocks/* linguist-generated=true
