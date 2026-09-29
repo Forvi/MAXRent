@@ -6,9 +6,7 @@ import (
 	"log/slog"
 	"os"
 
-	useradapters "github.com/Forvi/maxrent/internal/features/user/adapters"
-	userhandlers "github.com/Forvi/maxrent/internal/features/user/handlers"
-	userservice "github.com/Forvi/maxrent/internal/features/user/service"
+	"github.com/Forvi/maxrent/internal/handlers/info"
 	"github.com/Forvi/maxrent/internal/infrastructure/bot"
 	"github.com/Forvi/maxrent/internal/infrastructure/config"
 	"github.com/Forvi/maxrent/internal/infrastructure/database"
@@ -32,10 +30,8 @@ func BuildApp(ctx context.Context, cfg *config.Config) *App {
 	db := database.ConnectMust(ctx, cfg.DB, log)
 
 	// Фичи
-	userRepo := useradapters.NewUserRepository(db, log)
-	createUser := userservice.NewCreateUser(userRepo, log)
 	handlers := []bot.Handler{
-		userhandlers.NewUserHandler(createUser, botClient, log),
+		info.NewInfoHandler(botClient, log),
 	}
 
 	// Цикл long polling

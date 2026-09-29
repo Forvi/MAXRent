@@ -3,6 +3,9 @@ dir: "{{.InterfaceDir}}/mocks"
 outpkg: "mocks"
 filename: "mock_{{.InterfaceName}}.go"
 packages:
+  github.com/Forvi/maxrent/internal/ports:
+    interfaces:
+      MessageSender:
   github.com/Forvi/maxrent/internal/features/user/ports:
     interfaces:
       UserWriter:
