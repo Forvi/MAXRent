@@ -20,7 +20,7 @@ import (
 const (
 	startLandlordText = "Заполним заявку. Отвечайте по шагам, я буду спрашивать."
 	startTenantText   = "Введите код заявки арендодателя — 6 цифр."
-	publishedText     = "Заявка готова и ждёт арендатора.\n\nВаш код: %s\n\nОтдайте его арендатору — по коду он подключится."
+	publishedText     = "Заявка готова и ждёт арендатора.\n\nВаш код: %s\n\nОтдайте его арендатору — по коду он подключится.\nПредварительно заполните /data"
 	cancelledText     = "Заявка отменена. Создать новую можно командой /list."
 	codeNotFoundText  = "Заявка с таким кодом не найдена. Проверьте цифры и попробуйте ещё раз."
 	codeLimitText     = "Слишком много попыток. Подождите немного и попробуйте позже."
@@ -28,7 +28,7 @@ const (
 	noActiveText      = "У вас нет активной заявки. Создайте командой /list."
 	genericErrorText  = "Что-то пошло не так, попробуйте позже."
 	alreadyPairedText = "По этому коду уже идёт подбор арендатора."
-	pairFoundText     = "Арендатор нашёлся! Заявка собрана, начинаем оформление договора."
+	pairFoundText     = "Арендатор нашёлся! Заявка собрана, начинаем оформление договора.\n\nСвои данные для договора введите командой /data."
 	roleMismatchText  = "Эта кнопка доступна только арендатору."
 	joinPrefix        = "join_"
 )
@@ -57,30 +57,45 @@ func NewListingHandler(
 	}
 }
 
-// HandleUpdate Разбирает событие и ведёт пользователя по его сценарию.
-func (h *ListingHandler) HandleUpdate(ctx context.Context, update maxapi.Update) error {
+// HandleUpdate Ведёт пользователя по сценарию заявки.
+//
+// Возвращает handled: событие обработано здесь или оно не наше. Правило важно —
+// одно сообщение должен получать ровно один обработчик, иначе вопросы анкеты
+// заявки и анкеты договора перемешаются.
+//
+// Забирает себе:
+//   - команды /list и /cancel арендодателя;
+//   - обычный текст арендодателя, у которого идёт заполнение заявки;
+//   - обычный текст арендатора, если это шестизначный код и он ещё не подключён.
+func (h *ListingHandler) HandleUpdate(ctx context.Context, update maxapi.Update) (bool, error) {
 	switch update.Type {
 	case maxapi.UpdateMessageCallback:
 		return h.handleCallback(ctx, update)
 	case maxapi.UpdateMessageCreated:
 		return h.handleMessage(ctx, update)
 	default:
-		return nil
+		return false, nil
 	}
 }
 
-// handleMessage Обрабатывает команды и ответы анкеты.
-func (h *ListingHandler) handleMessage(ctx context.Context, update maxapi.Update) error {
-	command := extractCommand(update.Text)
+// handleMessage Обрабатывает команды и ответы анкеты заявки.
+func (h *ListingHandler) handleMessage(ctx context.Context, update maxapi.Update) (bool, error) {
+	command := update.CommandName()
 
-	// Команду /start обслуживает обработчик user: отвечаем только на свои.
 	switch command {
-	case "", "/list":
-	case "/cancel", "/cancel_list":
+	case "/list", "/cancel", "/cancel_list":
+		return true, h.handleCommand(ctx, update, command)
+	case "":
+		// Обычный текст: решаем по состоянию сделки, а не по тексту.
+		return h.handlePlainText(ctx, update)
 	default:
-		return nil
+		// /start, /info, /data, /contract — чужие команды.
+		return false, nil
 	}
+}
 
+// handleCommand Обрабатывает команды арендодателя.
+func (h *ListingHandler) handleCommand(ctx context.Context, update maxapi.Update, command string) error {
 	user, err := h.users.Get(ctx, domainuser.NewID(update.UserID))
 	if err != nil {
 		// Пользователь ещё не регистрировался: сценарий начнётся после /start.
@@ -88,88 +103,110 @@ func (h *ListingHandler) handleMessage(ctx context.Context, update maxapi.Update
 	}
 
 	if user.Role == nil {
-		if command == "" {
-			return nil
+		return h.reply(ctx, update.ChatID, noRoleText)
+	}
+
+	if *user.Role != domainuser.RoleLandlord {
+		return h.reply(ctx, update.ChatID, "Команда доступна только арендодателю.")
+	}
+
+	if command == "/list" {
+		active, err := h.listings.StartOrResume(ctx, domainuser.NewID(update.UserID))
+		if err != nil {
+			h.logger.ErrorContext(ctx, "failed to open listing", "err", err)
+
+			return h.reply(ctx, update.ChatID, genericErrorText)
 		}
 
-		return h.reply(ctx, update.ChatID, noRoleText)
+		if !active.IsDraft() {
+			// Заявка уже опубликована: повторно её не заполняем,
+			// показываем код, по которому арендатор подключается.
+			return h.reply(ctx, update.ChatID, fmt.Sprintf(publishedText, active.Code))
+		}
+
+		return h.askCurrentStep(ctx, update.ChatID, active)
+	}
+
+	return h.cancel(ctx, update.ChatID, domainuser.NewID(update.UserID))
+}
+
+// handlePlainText Разбирает обычный текст по роли и состоянию сделки.
+func (h *ListingHandler) handlePlainText(ctx context.Context, update maxapi.Update) (bool, error) {
+	user, err := h.users.Get(ctx, domainuser.NewID(update.UserID))
+	if err != nil {
+		// Пользователь ещё не регистрировался: сценарий начнётся после /start.
+		return false, nil //nolint:nilerr // сценарий ещё не начался, отвечать нечего
+	}
+
+	if user.Role == nil {
+		return false, nil
 	}
 
 	switch *user.Role {
 	case domainuser.RoleLandlord:
-		return h.handleLandlordMessage(ctx, update, command)
+		return h.handleLandlordAnswer(ctx, update)
 	case domainuser.RoleTenant:
-		return h.handleTenantMessage(ctx, update)
+		return h.handleTenantCode(ctx, update)
 	default:
-		return nil
+		return false, nil
 	}
 }
 
-// handleLandlordMessage Запускает или продолжает анкету арендодателя.
-func (h *ListingHandler) handleLandlordMessage(ctx context.Context, update maxapi.Update, command string) error {
+// handleLandlordAnswer Отвечает на шаг анкеты заявки.
+// Если анкета не идёт, сообщение не наше: его заберёт обработчик договора.
+func (h *ListingHandler) handleLandlordAnswer(ctx context.Context, update maxapi.Update) (bool, error) {
 	landlordID := domainuser.NewID(update.UserID)
-
-	if command == "/cancel" || command == "/cancel_list" {
-		return h.cancel(ctx, update.ChatID, landlordID)
-	}
 
 	active, err := h.listings.StartOrResume(ctx, landlordID)
 	if err != nil {
-		h.logger.ErrorContext(ctx, "failed to open listing", "err", err, "user_id", update.UserID)
+		h.logger.ErrorContext(ctx, "failed to open listing", "err", err)
 
-		return h.reply(ctx, update.ChatID, genericErrorText)
+		return true, h.reply(ctx, update.ChatID, genericErrorText)
 	}
 
-	// Опубликованную заявку заново не спрашиваем: показываем её код.
 	if !active.IsDraft() {
-		return h.reply(ctx, update.ChatID, fmt.Sprintf(publishedText, active.Code))
+		// Заявка опубликована: новые ответы не ждём, пусть вводит анкету договора.
+		return false, nil
 	}
 
-	// Команда /list просто продолжает текущий вопрос анкеты.
-	if command == "/list" {
-		return h.askCurrentStep(ctx, update.ChatID, active)
-	}
-
-	return h.answerStep(ctx, update.ChatID, active, update.Text)
+	return true, h.answerStep(ctx, update.ChatID, active, update.Text)
 }
 
-// handleTenantMessage Принимает код заявки.
-func (h *ListingHandler) handleTenantMessage(ctx context.Context, update maxapi.Update) error {
+// handleTenantCode Ищет заявку по введённому коду.
+// Уже подключённый арендатор чужие коды не ищет: у него одна активная сделка.
+func (h *ListingHandler) handleTenantCode(ctx context.Context, update maxapi.Update) (bool, error) {
 	code, ok := extractCode(update.Text)
 	if !ok {
-		return h.reply(ctx, update.ChatID, startTenantText)
+		// Не код — значит это ответ анкеты договора.
+		return false, nil
 	}
 
-	found, err := h.listings.FindByCode(ctx, domainuser.NewID(update.UserID), code)
+	paired, err := h.listings.IsPaired(ctx, domainuser.NewID(update.UserID))
 	if err != nil {
-		switch {
-		case errors.Is(err, listing.ErrNotFound):
-			return h.reply(ctx, update.ChatID, codeNotFoundText)
-		case errors.Is(err, listingservice.ErrTooManyAttempts):
-			return h.reply(ctx, update.ChatID, codeLimitText)
-		case errors.Is(err, listing.ErrInvalidAnswer):
-			return h.reply(ctx, update.ChatID, startTenantText)
-		default:
-			h.logger.ErrorContext(ctx, "failed to search listing", "err", err, "user_id", update.UserID)
+		h.logger.ErrorContext(ctx, "failed to check tenant pairing", "err", err, "user_id", update.UserID)
 
-			return h.reply(ctx, update.ChatID, genericErrorText)
-		}
+		return true, h.reply(ctx, update.ChatID, genericErrorText)
 	}
 
-	return h.showPreview(ctx, update.ChatID, found)
+	if paired {
+		return false, nil
+	}
+
+	return true, h.showListingByCode(ctx, update, code)
 }
 
 // handleCallback Обрабатывает нажатия кнопок анкеты и подтверждения подключения.
-func (h *ListingHandler) handleCallback(ctx context.Context, update maxapi.Update) error {
+// handleCallback Обрабатывает кнопки анкеты заявки и подключения арендатора.
+func (h *ListingHandler) handleCallback(ctx context.Context, update maxapi.Update) (bool, error) {
 	code, isJoin := strings.CutPrefix(update.Payload, joinPrefix)
 
 	switch {
 	case isJoin:
-		return h.handleJoin(ctx, update, code)
+		return true, h.handleJoin(ctx, update, code)
 	case isAnswerPayload(update.Payload):
-		return h.handleAnswerButton(ctx, update)
+		return true, h.handleAnswerButton(ctx, update)
 	default:
-		return nil
+		return false, nil
 	}
 }
 
@@ -329,6 +366,27 @@ func (h *ListingHandler) cancel(ctx context.Context, chatID int64, landlordID do
 	return h.reply(ctx, chatID, cancelledText)
 }
 
+// showListingByCode Ищет заявку по коду и показывает сводку до подключения.
+func (h *ListingHandler) showListingByCode(ctx context.Context, update maxapi.Update, code string) error {
+	found, err := h.listings.FindByCode(ctx, domainuser.NewID(update.UserID), code)
+	if err != nil {
+		switch {
+		case errors.Is(err, listing.ErrNotFound):
+			return h.reply(ctx, update.ChatID, codeNotFoundText)
+		case errors.Is(err, listingservice.ErrTooManyAttempts):
+			return h.reply(ctx, update.ChatID, codeLimitText)
+		case errors.Is(err, listing.ErrInvalidAnswer):
+			return h.reply(ctx, update.ChatID, startTenantText)
+		default:
+			h.logger.ErrorContext(ctx, "failed to search listing", "err", err, "user_id", update.UserID)
+
+			return h.reply(ctx, update.ChatID, genericErrorText)
+		}
+	}
+
+	return h.showPreview(ctx, update.ChatID, found)
+}
+
 // showPreview Показывает арендатору сводку заявки до подключения.
 func (h *ListingHandler) showPreview(ctx context.Context, chatID int64, l listing.Listing) error {
 	deposit := "без залога"
@@ -380,19 +438,6 @@ func (h *ListingHandler) reply(ctx context.Context, chatID int64, text string) e
 	}
 
 	return nil
-}
-
-// extractCommand Возвращает команду из текста без слеша и суффикса бота.
-func extractCommand(text string) string {
-	trimmed := strings.TrimSpace(text)
-	if !strings.HasPrefix(trimmed, "/") {
-		return ""
-	}
-
-	first, _, _ := strings.Cut(trimmed, " ")
-	command, _, _ := strings.Cut(first, "@")
-
-	return strings.ToLower(command)
 }
 
 // extractCode Извлекает шестизначный код из текста вида «123456» или «/join 123456».

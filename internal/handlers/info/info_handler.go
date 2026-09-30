@@ -4,7 +4,6 @@ package info
 import (
 	"context"
 	"log/slog"
-	"strings"
 
 	"github.com/Forvi/maxrent/internal/infrastructure/bot/maxapi"
 	"github.com/Forvi/maxrent/internal/ports"
@@ -34,17 +33,16 @@ func NewInfoHandler(sender ports.MessageSender, logger *slog.Logger) *InfoHandle
 	}
 }
 
-// HandleUpdate Обрабатывает входящее событие: на /info отвечает описанием сервиса.
-// Остальные события игнорируются.
-func (h *InfoHandler) HandleUpdate(ctx context.Context, update maxapi.Update) error {
+// HandleUpdate Отвечает на /info описанием сервиса.
+// Второе значение: true, если событие обработано здесь. Остальные события
+// оставляются другим обработчикам.
+func (h *InfoHandler) HandleUpdate(ctx context.Context, update maxapi.Update) (bool, error) {
 	if update.Type != maxapi.UpdateMessageCreated {
-		return nil
+		return false, nil
 	}
 
-	// В группах команда приходит с суффиксом бота: /info@MyBot
-	name, _, _ := strings.Cut(update.Command.Name, "@")
-	if name != "/info" {
-		return nil
+	if update.CommandName() != "/info" {
+		return false, nil
 	}
 
 	if err := h.sender.SendMessage(ctx, update.ChatID, infoMessage); err != nil {
@@ -53,15 +51,16 @@ func (h *InfoHandler) HandleUpdate(ctx context.Context, update maxapi.Update) er
 			"err", err,
 			"chat_id", update.ChatID,
 		)
-		return nil
+
+		return true, nil
 	}
 
 	h.logger.InfoContext(
 		ctx, "command handled",
-		"command", name,
+		"command", update.CommandName(),
 		"chat_id", update.ChatID,
 		"user_id", update.UserID,
 	)
 
-	return nil
+	return true, nil
 }

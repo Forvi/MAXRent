@@ -10,25 +10,30 @@ import (
 
 // Handler Обрабатывает входящее событие бота. Фичи реализуют этот интерфейс,
 // чтобы реагировать на апдейты, не зная о транспорте.
+//
+// Возвращает handled: сообщение обработано этим обработчиком или оно не его.
+// Поллер передаёт событие обработчикам по порядку и останавливается на первом
+// обработавшем. Без этого на одно сообщение отвечали бы сразу все обработчики,
+// и вопросы разных анкет перемешивались бы.
 type Handler interface {
-	HandleUpdate(ctx context.Context, update maxapi.Update) error
+	HandleUpdate(ctx context.Context, update maxapi.Update) (handled bool, err error)
 }
 
 // Poller Цикл long polling: последовательно запрашивает апдейты и передаёт их обработчикам.
 // Сетевые ошибки не завершают работу — цикл ждёт и повторяет запрос, чтобы бот
 // переживал кратковременные обрывы связи без перезапуска контейнера.
 type Poller struct {
-	client   *Client
-	logger   *slog.Logger
-	handlers []Handler
+	client *Client
+	logger *slog.Logger
+	router *Router
 }
 
 // NewPoller Создаёт поллер поверх клиента бота.
 func NewPoller(client *Client, logger *slog.Logger, handlers ...Handler) *Poller {
 	return &Poller{
-		client:   client,
-		logger:   logger,
-		handlers: handlers,
+		client: client,
+		logger: logger,
+		router: NewRouter(logger, handlers...),
 	}
 }
 
@@ -37,7 +42,7 @@ func NewPoller(client *Client, logger *slog.Logger, handlers ...Handler) *Poller
 func (p *Poller) Run(ctx context.Context) error {
 	var marker int64
 
-	p.logger.Info("polling started", "handlers", len(p.handlers))
+	p.logger.Info("polling started", "handlers", len(p.router.handlers))
 
 	for {
 		if err := ctx.Err(); err != nil {
@@ -65,19 +70,10 @@ func (p *Poller) Run(ctx context.Context) error {
 	}
 }
 
-// dispatch Передаёт пачку апдейтов обработчикам. Ошибка отдельного обработчика
-// не прерывает обработку остальных.
+// dispatch Раздаёт апдейты обработчикам.
 func (p *Poller) dispatch(ctx context.Context, updates []maxapi.Update) {
 	for _, update := range updates {
-		for _, handler := range p.handlers {
-			if err := handler.HandleUpdate(ctx, update); err != nil {
-				p.logger.ErrorContext(ctx, "handle update failed",
-					"err", err,
-					"update_type", update.Type,
-					"chat_id", update.ChatID,
-				)
-			}
-		}
+		p.router.Route(ctx, update)
 	}
 }
 

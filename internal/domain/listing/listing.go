@@ -60,6 +60,8 @@ type Listing struct {
 	Utilities Utilities
 	// Description свободное описание, необязательное.
 	Description string
+	// Сведения сторон для договора. Пустые, пока анкета не заполнена.
+	ContractData ContractData
 	// CreatedAt момент создания.
 	CreatedAt time.Time
 	// UpdatedAt момент последнего изменения.
@@ -103,6 +105,14 @@ func (l Listing) Complete(code Code, now time.Time) Listing {
 }
 
 // WithTenant Подключает арендатора к заявке.
+// WithContractData Возвращает копию заявки с указанными сведениями сторон.
+func (l Listing) WithContractData(data ContractData) Listing {
+	l.ContractData = data
+
+	return l
+}
+
+// WithTenant Возвращает копию заявки, подключённой к арендатору.
 func (l Listing) WithTenant(tenantID domainuser.ID, now time.Time) Listing {
 	l.TenantID = &tenantID
 	l.Status = StatusPaired

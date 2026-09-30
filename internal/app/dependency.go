@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/Forvi/maxrent/internal/document/pdf"
+	contracthandlers "github.com/Forvi/maxrent/internal/handlers/contract"
 	"github.com/Forvi/maxrent/internal/handlers/info"
 	listinghandlers "github.com/Forvi/maxrent/internal/handlers/listing"
 	userhandlers "github.com/Forvi/maxrent/internal/handlers/user"
@@ -14,6 +16,7 @@ import (
 	"github.com/Forvi/maxrent/internal/infrastructure/database"
 	"github.com/Forvi/maxrent/internal/infrastructure/logger"
 	"github.com/Forvi/maxrent/internal/repositories"
+	contractservice "github.com/Forvi/maxrent/internal/services/contract"
 	listingservice "github.com/Forvi/maxrent/internal/services/listing"
 	userservice "github.com/Forvi/maxrent/internal/services/user"
 )
@@ -49,9 +52,16 @@ func BuildApp(ctx context.Context, cfg *config.Config) *App {
 	listingRepo := repositories.NewListingRepositoryAdapter(db, log)
 	listingService := listingservice.NewService(listingRepo, log)
 
+	contractPartyRepo := repositories.NewContractPartyAdapter(db, log)
+	contractService := contractservice.NewService(contractPartyRepo, pdf.NewGenerator(), log)
+
+	// Порядок важен: обработчик договора забирает обычный текст, когда
+	// анкета стороны ещё не заполнена, поэтому он идёт после обработчика
+	// заявки. Иначе адрес и цена уходили бы в анкету договора.
 	handlers := []bot.Handler{
 		userhandlers.NewUserHandler(userService, botClient, log),
 		listinghandlers.NewListingHandler(listingService, userService, botClient, log),
+		contracthandlers.NewHandler(contractService, listingRepo, userService, botClient, log),
 		info.NewInfoHandler(botClient, log),
 	}
 

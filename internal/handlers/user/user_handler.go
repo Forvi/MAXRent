@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"strings"
 
 	domainuser "github.com/Forvi/maxrent/internal/domain/user"
 	"github.com/Forvi/maxrent/internal/infrastructure/bot/maxapi"
@@ -54,29 +53,30 @@ func NewUserHandler(
 	}
 }
 
-// HandleUpdate Разбирает входящее событие и выполняет нужное действие.
-func (h *UserHandler) HandleUpdate(ctx context.Context, update maxapi.Update) error {
+// HandleUpdate Обрабатывает /start и нажатия кнопок выбора роли.
+// Второе значение: true, если событие обработано здесь. Всё остальное —
+// анкеты заявки и договора — оставляется соответствующим обработчикам,
+// иначе на одно сообщение отвечали бы несколько обработчиков сразу.
+func (h *UserHandler) HandleUpdate(ctx context.Context, update maxapi.Update) (bool, error) {
 	switch update.Type {
 	case maxapi.UpdateMessageCallback:
-		return h.handleRoleChoice(ctx, update)
+		// Кнопки роли: их payload знает только этот обработчик.
+		if domainuser.IsRolePayload(update.Payload) {
+			h.handleRoleChoice(ctx, update)
+
+			return true, nil
+		}
+
+		return false, nil
 	case maxapi.UpdateMessageCreated:
-		return h.handleMessage(ctx, update)
+		if update.CommandName() != "/start" {
+			return false, nil
+		}
+
+		return true, h.handleStart(ctx, update)
 	default:
-		return nil
+		return false, nil
 	}
-}
-
-// handleMessage Обрабатывает текстовые команды. Остальные команды обслуживаются
-// другими обработчиками, поэтому здесь игнорируются: иначе пользователь получил бы
-// два ответа на одну команду.
-func (h *UserHandler) handleMessage(ctx context.Context, update maxapi.Update) error {
-	// В группах команда приходит с суффиксом бота: /start@MyBot
-	name, _, _ := strings.Cut(update.Command.Name, "@")
-	if name != "/start" {
-		return nil
-	}
-
-	return h.handleStart(ctx, update)
 }
 
 // handleStart Регистрирует пользователя и спрашивает роль, если она ещё не выбрана.
@@ -111,14 +111,16 @@ func (h *UserHandler) askRole(ctx context.Context, chatID int64) error {
 }
 
 // handleRoleChoice Сохраняет роль, выбранную кнопкой.
-func (h *UserHandler) handleRoleChoice(ctx context.Context, update maxapi.Update) error {
+//
+// Ошибки пишутся в лог, а апдейт в любом случае считается обработанным:
+// пользователь уже нажал кнопку, и молчание хуже сообщения об ошибке.
+func (h *UserHandler) handleRoleChoice(ctx context.Context, update maxapi.Update) {
 	role, err := domainuser.RoleFromPayload(update.Payload)
 	if err != nil {
 		h.logger.WarnContext(ctx, "unknown role payload", "payload", update.Payload, "user_id", update.UserID)
 
 		// Нераспознанный payload — это мусор на стороне клиента, а не сбой приложения.
-		// Возвращать ошибку в цикл опроса незачем: апдейт мы всё равно отбросили.
-		return nil //nolint:nilerr // намеренно: ошибка разбора payload не является сбоем
+		return
 	}
 
 	updated, err := h.service.SetRole(ctx, domainuser.NewID(update.UserID), role)
@@ -130,15 +132,13 @@ func (h *UserHandler) handleRoleChoice(ctx context.Context, update maxapi.Update
 			h.logger.ErrorContext(ctx, "failed to answer callback", "err", answerErr)
 		}
 
-		return nil
+		return
 	}
 
 	confirmation := nextStepByRole(*updated.Role)
 	if err := h.sender.AnswerCallback(ctx, update.CallbackID, confirmation); err != nil {
 		h.logger.ErrorContext(ctx, "failed to answer callback", "err", err, "user_id", update.UserID)
 	}
-
-	return nil
 }
 
 // reply Отправляет текстовое сообщение, логируя ошибку отправки.

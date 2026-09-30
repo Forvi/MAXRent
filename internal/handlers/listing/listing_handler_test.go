@@ -71,8 +71,19 @@ func textUpdate(chatID, userID int64, text string) maxapi.Update {
 		ChatID:  chatID,
 		UserID:  userID,
 		Text:    text,
-		Command: maxapi.Command{},
+		Command: withCommand(text),
 	}
+}
+
+// withCommand Заполняет команду так же, как это делает MAX: текст, начинающийся
+// со слеша, приходит как команда. Обработчики смотрят именно в Command.Name,
+// поэтому тестовые события должны повторять это правило.
+func withCommand(text string) maxapi.Command {
+	if !strings.HasPrefix(text, "/") {
+		return maxapi.Command{}
+	}
+
+	return maxapi.Command{Name: text}
 }
 
 // commandUpdate Событие с командой. Чата всегда один — landlordChatID.
@@ -98,7 +109,9 @@ func TestListCommandAsksFirstQuestion(t *testing.T) {
 	})).Return(nil).Once()
 
 	update := commandUpdate(int64(landlordID), "/list")
-	require.NoError(t, handler.HandleUpdate(ctx, update))
+	handled, err := handler.HandleUpdate(ctx, update)
+	require.NoError(t, err)
+	require.True(t, handled)
 }
 
 func TestLandlordAnswerAdvancesStep(t *testing.T) {
@@ -117,8 +130,10 @@ func TestLandlordAnswerAdvancesStep(t *testing.T) {
 		return strings.Contains(text, "аренда в месяц")
 	})).Return(nil).Once()
 
-	require.NoError(t, handler.HandleUpdate(ctx,
-		textUpdate(landlordChatID, int64(landlordID), "Москва, ул. Тверская, д. 1, кв. 5")))
+	handled, err := handler.HandleUpdate(ctx,
+		textUpdate(landlordChatID, int64(landlordID), "Москва, ул. Тверская, д. 1, кв. 5"))
+	require.NoError(t, err)
+	require.True(t, handled)
 }
 
 func TestLandlordInvalidAnswerRepeatsQuestion(t *testing.T) {
@@ -134,7 +149,9 @@ func TestLandlordInvalidAnswerRepeatsQuestion(t *testing.T) {
 		return strings.Contains(text, "адрес")
 	})).Return(nil).Once()
 
-	require.NoError(t, handler.HandleUpdate(ctx, textUpdate(landlordChatID, int64(landlordID), "Москва")))
+	handled, err := handler.HandleUpdate(ctx, textUpdate(landlordChatID, int64(landlordID), "Москва"))
+	require.NoError(t, err)
+	require.True(t, handled)
 }
 
 func TestLandlordTermButtonAsksNextQuestion(t *testing.T) {
@@ -151,13 +168,15 @@ func TestLandlordTermButtonAsksNextQuestion(t *testing.T) {
 	sender.EXPECT().AnswerCallback(ctx, callbackID, "Принято").Return(nil).Once()
 	sender.EXPECT().SendMessageWithKeyboard(ctx, landlordChatID, mock.Anything, mock.Anything).Return(nil).Once()
 
-	require.NoError(t, handler.HandleUpdate(ctx, maxapi.Update{
+	handled, err := handler.HandleUpdate(ctx, maxapi.Update{
 		Type:       maxapi.UpdateMessageCallback,
 		ChatID:     landlordChatID,
 		UserID:     int64(landlordID),
 		Payload:    listing.PayloadTermShort,
 		CallbackID: callbackID,
-	}))
+	})
+	require.NoError(t, err)
+	require.True(t, handled)
 }
 
 func TestLandlordUtilitiesButtonCompletesListing(t *testing.T) {
@@ -176,13 +195,15 @@ func TestLandlordUtilitiesButtonCompletesListing(t *testing.T) {
 	})).Return(nil).Once()
 
 	// Ответ кнопкой на последний шаг завершает анкету.
-	require.NoError(t, handler.HandleUpdate(ctx, maxapi.Update{
+	handled, err := handler.HandleUpdate(ctx, maxapi.Update{
 		Type:       maxapi.UpdateMessageCallback,
 		ChatID:     landlordChatID,
 		UserID:     int64(landlordID),
 		Payload:    listing.PayloadUtilitiesShared,
 		CallbackID: callbackID,
-	}))
+	})
+	require.NoError(t, err)
+	require.True(t, handled)
 }
 
 func TestPublishedListingDoesNotRestartQuestionnaire(t *testing.T) {
@@ -198,7 +219,9 @@ func TestPublishedListingDoesNotRestartQuestionnaire(t *testing.T) {
 		return strings.Contains(text, "123456")
 	})).Return(nil).Once()
 
-	require.NoError(t, handler.HandleUpdate(ctx, commandUpdate(int64(landlordID), "/list")))
+	handled, err := handler.HandleUpdate(ctx, commandUpdate(int64(landlordID), "/list"))
+	require.NoError(t, err)
+	require.True(t, handled)
 }
 
 func TestCancelListing(t *testing.T) {
@@ -215,7 +238,9 @@ func TestCancelListing(t *testing.T) {
 		return strings.Contains(text, "отменена")
 	})).Return(nil).Once()
 
-	require.NoError(t, handler.HandleUpdate(ctx, commandUpdate(int64(landlordID), "/cancel")))
+	handled, err := handler.HandleUpdate(ctx, commandUpdate(int64(landlordID), "/cancel"))
+	require.NoError(t, err)
+	require.True(t, handled)
 }
 
 func TestTenantSeesListingPreview(t *testing.T) {
@@ -224,13 +249,18 @@ func TestTenantSeesListingPreview(t *testing.T) {
 	published := listingfixture.DraftAtStep(t, listing.StepDone).Complete(listingfixture.Code, time.Now())
 
 	expectUserGet(userRepo, tenant(tenantID))
+	// Арендатор ещё не подключён — значит, код нужно искать.
+	listingRepo.EXPECT().FindActiveByTenant(ctx, tenantID).
+		Return(listing.Listing{}, listing.ErrNoActiveListing).Once()
 	listingRepo.EXPECT().FindByCode(ctx, listingfixture.Code).Return(published, nil).Once()
 	// Сводка с кнопкой подтверждения: подключение только после согласия.
 	sender.EXPECT().SendMessageWithKeyboard(ctx, tenantChatID, mock.MatchedBy(func(text string) bool {
 		return strings.Contains(text, "Тверская") && strings.Contains(text, "35000")
 	}), mock.MatchedBy(hasJoinButton)).Return(nil).Once()
 
-	require.NoError(t, handler.HandleUpdate(ctx, textUpdate(tenantChatID, int64(tenantID), "123456")))
+	handled, err := handler.HandleUpdate(ctx, textUpdate(tenantChatID, int64(tenantID), "123456"))
+	require.NoError(t, err)
+	require.True(t, handled)
 }
 
 func TestTenantUnknownCode(t *testing.T) {
@@ -238,13 +268,17 @@ func TestTenantUnknownCode(t *testing.T) {
 	handler, listingRepo, userRepo, sender := setup(t)
 
 	expectUserGet(userRepo, tenant(tenantID))
+	listingRepo.EXPECT().FindActiveByTenant(ctx, tenantID).
+		Return(listing.Listing{}, listing.ErrNoActiveListing).Once()
 	listingRepo.EXPECT().FindByCode(ctx, listing.Code("000000")).
 		Return(listing.Listing{}, listing.ErrNotFound).Once()
 	sender.EXPECT().SendMessage(ctx, tenantChatID, mock.MatchedBy(func(text string) bool {
 		return strings.Contains(text, "не найдена")
 	})).Return(nil).Once()
 
-	require.NoError(t, handler.HandleUpdate(ctx, textUpdate(tenantChatID, int64(tenantID), "000000")))
+	handled, err := handler.HandleUpdate(ctx, textUpdate(tenantChatID, int64(tenantID), "000000"))
+	require.NoError(t, err)
+	require.True(t, handled)
 }
 
 func TestTenantJoinButtonPairsListing(t *testing.T) {
@@ -261,13 +295,15 @@ func TestTenantJoinButtonPairsListing(t *testing.T) {
 		return strings.Contains(text, "Подключено")
 	})).Return(nil).Once()
 
-	require.NoError(t, handler.HandleUpdate(ctx, maxapi.Update{
+	handled, err := handler.HandleUpdate(ctx, maxapi.Update{
 		Type:       maxapi.UpdateMessageCallback,
 		ChatID:     tenantChatID,
 		UserID:     int64(tenantID),
 		Payload:    "join_123456",
 		CallbackID: callbackID,
-	}))
+	})
+	require.NoError(t, err)
+	require.True(t, handled)
 }
 
 func TestTenantCannotJoinOwnListing(t *testing.T) {
@@ -282,13 +318,15 @@ func TestTenantCannotJoinOwnListing(t *testing.T) {
 		return strings.Contains(text, "ваша")
 	})).Return(nil).Once()
 
-	require.NoError(t, handler.HandleUpdate(ctx, maxapi.Update{
+	handled, err := handler.HandleUpdate(ctx, maxapi.Update{
 		Type:       maxapi.UpdateMessageCallback,
 		ChatID:     tenantChatID,
 		UserID:     int64(tenantID),
 		Payload:    "join_123456",
 		CallbackID: callbackID,
-	}))
+	})
+	require.NoError(t, err)
+	require.True(t, handled)
 }
 
 func TestForeignCommandIsIgnored(t *testing.T) {
@@ -296,7 +334,9 @@ func TestForeignCommandIsIgnored(t *testing.T) {
 	handler, _, _, sender := setup(t)
 
 	// /info обслуживается другой фичей: второй ответ пользователю не нужен.
-	require.NoError(t, handler.HandleUpdate(ctx, commandUpdate(int64(landlordID), "/info")))
+	handled, err := handler.HandleUpdate(ctx, commandUpdate(int64(landlordID), "/info"))
+	require.NoError(t, err)
+	require.False(t, handled)
 	sender.AssertNotCalled(t, "SendMessage", mock.Anything, mock.Anything, mock.Anything)
 	sender.AssertNotCalled(t, "SendMessageWithKeyboard", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 }
@@ -308,7 +348,9 @@ func TestUnregisteredUserIsIgnored(t *testing.T) {
 	userRepo.EXPECT().FindByID(mock.Anything, mock.Anything).
 		Return(domainuser.User{}, domainuser.ErrNotFound).Once()
 
-	require.NoError(t, handler.HandleUpdate(ctx, textUpdate(landlordChatID, 999, "/list")))
+	handled, err := handler.HandleUpdate(ctx, textUpdate(landlordChatID, 999, "/list"))
+	require.NoError(t, err)
+	require.True(t, handled)
 	sender.AssertNotCalled(t, "SendMessage", mock.Anything, mock.Anything, mock.Anything)
 }
 
@@ -322,20 +364,25 @@ func TestUserWithoutRoleGetsHint(t *testing.T) {
 		return strings.Contains(text, "/start")
 	})).Return(nil).Once()
 
-	require.NoError(t, handler.HandleUpdate(ctx, commandUpdate(int64(landlordID), "/list")))
+	handled, err := handler.HandleUpdate(ctx, commandUpdate(int64(landlordID), "/list"))
+	require.NoError(t, err)
+	require.True(t, handled)
 }
 
-func TestTenantWithoutCodeGetsPrompt(t *testing.T) {
+func TestTenantPlainTextGoesToContractQuestionnaire(t *testing.T) {
 	ctx := context.Background()
 	handler, _, userRepo, sender := setup(t)
 	renter := tenant(tenantID)
 
 	expectUserGet(userRepo, renter)
-	sender.EXPECT().SendMessage(ctx, tenantChatID, mock.MatchedBy(func(text string) bool {
-		return strings.Contains(text, "6 цифр")
-	})).Return(nil).Once()
 
-	require.NoError(t, handler.HandleUpdate(ctx, textUpdate(tenantChatID, int64(tenantID), "привет")))
+	// Текст без кода — это ответ анкеты договора, а не заявки.
+	// Обработчик заявки обязан его пропустить, иначе ФИО арендатора
+	// перехватывалось бы поиском кода.
+	handled, err := handler.HandleUpdate(ctx, textUpdate(tenantChatID, int64(tenantID), "привет"))
+	require.NoError(t, err)
+	require.False(t, handled)
+	sender.AssertNotCalled(t, "SendMessage", mock.Anything, mock.Anything, mock.Anything)
 }
 
 func TestRepoErrorDoesNotBreakPolling(t *testing.T) {
@@ -350,7 +397,9 @@ func TestRepoErrorDoesNotBreakPolling(t *testing.T) {
 		return strings.Contains(text, "позже")
 	})).Return(nil).Once()
 
-	require.NoError(t, handler.HandleUpdate(ctx, commandUpdate(int64(landlordID), "/list")))
+	handled, err := handler.HandleUpdate(ctx, commandUpdate(int64(landlordID), "/list"))
+	require.NoError(t, err)
+	require.True(t, handled)
 }
 
 // hasJoinButton Проверяет, что в клавиатуре есть кнопка подключения с кодом.
@@ -380,13 +429,15 @@ func TestLandlordButtonRejectedForTenant(t *testing.T) {
 		return strings.Contains(text, "только арендатору")
 	})).Return(nil).Once()
 
-	require.NoError(t, handler.HandleUpdate(ctx, maxapi.Update{
+	handled, err := handler.HandleUpdate(ctx, maxapi.Update{
 		Type:       maxapi.UpdateMessageCallback,
 		ChatID:     tenantChatID,
 		UserID:     int64(tenantID),
 		Payload:    listing.PayloadTermShort,
 		CallbackID: callbackID,
-	}))
+	})
+	require.NoError(t, err)
+	require.True(t, handled)
 	listingRepo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
 	listingRepo.AssertNotCalled(t, "Update", mock.Anything, mock.Anything)
 }
@@ -400,11 +451,13 @@ func TestJoinButtonRejectedForLandlord(t *testing.T) {
 		return strings.Contains(text, "только арендатору")
 	})).Return(nil).Once()
 
-	require.NoError(t, handler.HandleUpdate(ctx, maxapi.Update{
+	handled, err := handler.HandleUpdate(ctx, maxapi.Update{
 		Type:       maxapi.UpdateMessageCallback,
 		ChatID:     landlordChatID,
 		UserID:     int64(landlordID),
 		Payload:    "join_123456",
 		CallbackID: callbackID,
-	}))
+	})
+	require.NoError(t, err)
+	require.True(t, handled)
 }

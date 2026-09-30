@@ -2,6 +2,7 @@
 package bot
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log/slog"
@@ -121,6 +122,28 @@ func (c *Client) AnswerCallback(ctx context.Context, callbackID, text string) er
 	answer := model.CallbackAnswer{Message: &model.NewMessageBody{Text: text}}
 	if _, err := c.api.Messages.AnswerOnCallback(ctx, callbackID, answer); err != nil {
 		return fmt.Errorf("answer callback %s: %w", callbackID, err)
+	}
+
+	return nil
+}
+
+// SendDocument Загружает файл в мессенджер и отправляет его в чат.
+// Файл сначала загружается отдельным запросом: вложение передаётся токеном.
+func (c *Client) SendDocument(ctx context.Context, chatID int64, fileName string, content []byte) error {
+	token, err := c.api.Upload.Upload(
+		ctx,
+		model.UploadFile,
+		bytes.NewReader(content),
+		fileName,
+		int64(len(content)),
+	)
+	if err != nil {
+		return fmt.Errorf("upload document %q: %w", fileName, err)
+	}
+
+	msg := maxbot.NewMessage().SetChat(chatID).AddAttachByToken(token, model.AttachFile)
+	if _, err := c.api.Messages.Send(ctx, msg); err != nil {
+		return fmt.Errorf("send document to chat %d: %w", chatID, err)
 	}
 
 	return nil

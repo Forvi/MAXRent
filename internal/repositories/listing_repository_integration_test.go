@@ -28,6 +28,12 @@ func TestListingRepositoryIntegration(t *testing.T) {
 	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()
+
+	// Без поднятой БД тест не выполняется: красный набор у того, кто
+	// ещё не запустил docker compose, пользы не приносит.
+	if err := db.PingContext(ctx); err != nil {
+		t.Skipf("database is not reachable: %v", err)
+	}
 	repo := repositories.NewListingRepositoryAdapter(db, discardLogger())
 
 	// Схему поднимает файл миграции, здесь проверяем её применимость.

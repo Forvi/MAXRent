@@ -195,6 +195,63 @@ func (_c *MockListingRepository_FindActiveByLandlord_Call) RunAndReturn(run func
 	return _c
 }
 
+// FindActiveByTenant provides a mock function with given fields: ctx, tenantID
+func (_m *MockListingRepository) FindActiveByTenant(ctx context.Context, tenantID user.ID) (listing.Listing, error) {
+	ret := _m.Called(ctx, tenantID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for FindActiveByTenant")
+	}
+
+	var r0 listing.Listing
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, user.ID) (listing.Listing, error)); ok {
+		return rf(ctx, tenantID)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, user.ID) listing.Listing); ok {
+		r0 = rf(ctx, tenantID)
+	} else {
+		r0 = ret.Get(0).(listing.Listing)
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, user.ID) error); ok {
+		r1 = rf(ctx, tenantID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockListingRepository_FindActiveByTenant_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FindActiveByTenant'
+type MockListingRepository_FindActiveByTenant_Call struct {
+	*mock.Call
+}
+
+// FindActiveByTenant is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID user.ID
+func (_e *MockListingRepository_Expecter) FindActiveByTenant(ctx interface{}, tenantID interface{}) *MockListingRepository_FindActiveByTenant_Call {
+	return &MockListingRepository_FindActiveByTenant_Call{Call: _e.mock.On("FindActiveByTenant", ctx, tenantID)}
+}
+
+func (_c *MockListingRepository_FindActiveByTenant_Call) Run(run func(ctx context.Context, tenantID user.ID)) *MockListingRepository_FindActiveByTenant_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(user.ID))
+	})
+	return _c
+}
+
+func (_c *MockListingRepository_FindActiveByTenant_Call) Return(_a0 listing.Listing, _a1 error) *MockListingRepository_FindActiveByTenant_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockListingRepository_FindActiveByTenant_Call) RunAndReturn(run func(context.Context, user.ID) (listing.Listing, error)) *MockListingRepository_FindActiveByTenant_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // FindByCode provides a mock function with given fields: ctx, code
 func (_m *MockListingRepository) FindByCode(ctx context.Context, code listing.Code) (listing.Listing, error) {
 	ret := _m.Called(ctx, code)

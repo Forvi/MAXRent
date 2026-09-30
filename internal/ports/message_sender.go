@@ -15,4 +15,6 @@ type MessageSender interface {
 	SendMessageWithKeyboard(ctx context.Context, chatID int64, text string, kb *maxapi.Keyboard) error
 	// AnswerCallback Подтверждает нажатие на кнопку, убирая индикатор ожидания.
 	AnswerCallback(ctx context.Context, callbackID, text string) error
+	// SendDocument Загружает файл в мессенджер и отправляет его в чат.
+	SendDocument(ctx context.Context, chatID int64, fileName string, content []byte) error
 }

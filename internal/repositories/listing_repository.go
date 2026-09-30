@@ -15,7 +15,9 @@ import (
 // listingColumns Колонки заявки в фиксированном порядке —
 // их используют и запросы, и сборка сущности при сканировании.
 const listingColumns = `id, code, landlord_id, tenant_id, status, step,
-	address, price, deposit, term, utilities, description, created_at, updated_at`
+	address, price, deposit, term, utilities, description,
+	tenant_full_name, tenant_phone, landlord_full_name, landlord_phone,
+	contract_document_token, created_at, updated_at`
 
 // ListingRepositoryAdapter Хранение заявок в PostgreSQL.
 type ListingRepositoryAdapter struct {
@@ -102,6 +104,32 @@ func (r *ListingRepositoryAdapter) FindActiveByLandlord(
 			"err", err, "landlord_id", landlordID.String())
 
 		return listing.Listing{}, fmt.Errorf("find active listing: %w", err)
+	}
+
+	return found, nil
+}
+
+// FindActiveByTenant Возвращает заявку, к которой подключён арендатор.
+func (r *ListingRepositoryAdapter) FindActiveByTenant(
+	ctx context.Context,
+	tenantID domainuser.ID,
+) (listing.Listing, error) {
+	const query = `SELECT ` + listingColumns + `
+		FROM listings
+		WHERE tenant_id = $1 AND status IN ('draft', 'published', 'paired')
+		ORDER BY id DESC
+		LIMIT 1`
+
+	found, err := scanListing(r.db.QueryRowContext(ctx, query, tenantID.Int64()))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return listing.Listing{}, listing.ErrNoActiveListing
+		}
+
+		r.logger.ErrorContext(ctx, "failed to find listing by tenant",
+			"err", err, "tenant_id", tenantID.String())
+
+		return listing.Listing{}, fmt.Errorf("find active listing by tenant: %w", err)
 	}
 
 	return found, nil
@@ -203,11 +231,19 @@ func scanListing(row rowScanner) (listing.Listing, error) {
 		description sql.NullString
 		createdAt   time.Time
 		updatedAt   time.Time
+
+		tenantName    sql.NullString
+		tenantPhone   sql.NullString
+		landlordName  sql.NullString
+		landlordPhone sql.NullString
+		documentToken sql.NullString
 	)
 
 	if err := row.Scan(
 		&id, &code, &landlordID, &tenantID, &status, &step,
-		&address, &price, &deposit, &term, &utilities, &description, &createdAt, &updatedAt,
+		&address, &price, &deposit, &term, &utilities, &description,
+		&tenantName, &tenantPhone, &landlordName, &landlordPhone, &documentToken,
+		&createdAt, &updatedAt,
 	); err != nil {
 		//nolint:wrapcheck // sql.ErrNoRows разбирается вызывающим через errors.Is
 		return listing.Listing{}, err
@@ -222,8 +258,15 @@ func scanListing(row rowScanner) (listing.Listing, error) {
 		Term:        listing.Term(term.String),
 		Utilities:   listing.Utilities(utilities.String),
 		Description: description.String,
-		CreatedAt:   createdAt,
-		UpdatedAt:   updatedAt,
+		ContractData: listing.ContractData{
+			TenantFullName:   tenantName.String,
+			TenantPhone:      tenantPhone.String,
+			LandlordFullName: landlordName.String,
+			LandlordPhone:    landlordPhone.String,
+			DocumentToken:    documentToken.String,
+		},
+		CreatedAt: createdAt,
+		UpdatedAt: updatedAt,
 	}
 
 	if code.Valid && code.String != "" {

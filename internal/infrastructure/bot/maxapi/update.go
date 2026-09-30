@@ -3,7 +3,11 @@
 // поэтому смена библиотеки не затрагивает доменный код.
 package maxapi
 
-import "github.com/max-messenger/max-bot-api-client-go/v2/model"
+import (
+	"strings"
+
+	"github.com/max-messenger/max-bot-api-client-go/v2/model"
+)
 
 // UpdateType Тип входящего события.
 type UpdateType string
@@ -48,6 +52,15 @@ type Command struct {
 	Params []string
 	// Text исходный текст команды.
 	Text string
+}
+
+// CommandName Возвращает имя команды без суффикса бота, в нижнем регистре.
+// В группах команда приходит как /start@MyBot, поэтому суффикс отбрасывается.
+// Пустая строка означает, что команды в сообщении нет.
+func (u Update) CommandName() string {
+	name, _, _ := strings.Cut(u.Command.Name, "@")
+
+	return strings.ToLower(name)
 }
 
 // IsCommand сообщает, начинается ли текст с команды.

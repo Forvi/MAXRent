@@ -100,7 +100,10 @@ func TestHandleUpdate(t *testing.T) {
 
 			handler := info.NewInfoHandler(sender, testLogger)
 
-			require.NoError(t, handler.HandleUpdate(ctx, tt.update))
+			handled, err := handler.HandleUpdate(ctx, tt.update)
+			require.NoError(t, err)
+			require.Equal(t, tt.wantSend, handled,
+				"handled должен совпадать с признаком отправки ответа")
 			sender.AssertExpectations(t)
 		})
 	}

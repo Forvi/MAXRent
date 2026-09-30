@@ -70,6 +70,55 @@ func (_c *MockMessageSender_AnswerCallback_Call) RunAndReturn(run func(context.C
 	return _c
 }
 
+// SendDocument provides a mock function with given fields: ctx, chatID, fileName, content
+func (_m *MockMessageSender) SendDocument(ctx context.Context, chatID int64, fileName string, content []byte) error {
+	ret := _m.Called(ctx, chatID, fileName, content)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SendDocument")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, int64, string, []byte) error); ok {
+		r0 = rf(ctx, chatID, fileName, content)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockMessageSender_SendDocument_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SendDocument'
+type MockMessageSender_SendDocument_Call struct {
+	*mock.Call
+}
+
+// SendDocument is a helper method to define mock.On call
+//   - ctx context.Context
+//   - chatID int64
+//   - fileName string
+//   - content []byte
+func (_e *MockMessageSender_Expecter) SendDocument(ctx interface{}, chatID interface{}, fileName interface{}, content interface{}) *MockMessageSender_SendDocument_Call {
+	return &MockMessageSender_SendDocument_Call{Call: _e.mock.On("SendDocument", ctx, chatID, fileName, content)}
+}
+
+func (_c *MockMessageSender_SendDocument_Call) Run(run func(ctx context.Context, chatID int64, fileName string, content []byte)) *MockMessageSender_SendDocument_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(int64), args[2].(string), args[3].([]byte))
+	})
+	return _c
+}
+
+func (_c *MockMessageSender_SendDocument_Call) Return(_a0 error) *MockMessageSender_SendDocument_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockMessageSender_SendDocument_Call) RunAndReturn(run func(context.Context, int64, string, []byte) error) *MockMessageSender_SendDocument_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // SendMessage provides a mock function with given fields: ctx, chatID, text
 func (_m *MockMessageSender) SendMessage(ctx context.Context, chatID int64, text string) error {
 	ret := _m.Called(ctx, chatID, text)

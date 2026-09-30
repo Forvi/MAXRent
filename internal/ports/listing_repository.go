@@ -18,6 +18,9 @@ type ListingRepository interface {
 	// FindActiveByLandlord Возвращает активную заявку арендодателя
 	// (черновик или опубликованную). Если её нет — listing.ErrNoActiveListing.
 	FindActiveByLandlord(ctx context.Context, landlordID domainuser.ID) (listing.Listing, error)
+	// FindActiveByTenant Возвращает заявку, к которой подключён арендатор.
+	// Если он ещё ни к какой не подключён — listing.ErrNoActiveListing.
+	FindActiveByTenant(ctx context.Context, tenantID domainuser.ID) (listing.Listing, error)
 	// FindByCode Возвращает опубликованную заявку по коду.
 	FindByCode(ctx context.Context, code listing.Code) (listing.Listing, error)
 	// Update сохраняет изменённую заявку.

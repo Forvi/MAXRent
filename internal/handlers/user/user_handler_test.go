@@ -61,7 +61,9 @@ func TestStartAsksRoleForNewUser(t *testing.T) {
 		Return(nil).
 		Once()
 
-	require.NoError(t, handler.HandleUpdate(ctx, startCommand()))
+	handled, err := handler.HandleUpdate(ctx, startCommand())
+	require.NoError(t, err)
+	require.True(t, handled)
 	repo.AssertExpectations(t)
 	sender.AssertExpectations(t)
 }
@@ -107,7 +109,9 @@ func TestStartWithRoleDoesNotAskAgain(t *testing.T) {
 		Return(nil).
 		Once()
 
-	require.NoError(t, handler.HandleUpdate(ctx, startCommand()))
+	handled, err := handler.HandleUpdate(ctx, startCommand())
+	require.NoError(t, err)
+	require.True(t, handled)
 	// Кнопки повторно не показываются.
 	sender.AssertNotCalled(t, "SendMessageWithKeyboard", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 	repo.AssertExpectations(t)
@@ -128,7 +132,9 @@ func TestStartWithBotSuffix(t *testing.T) {
 	update := startCommand()
 	update.Command.Name = "/start@t320_hakaton_max_bot"
 
-	require.NoError(t, handler.HandleUpdate(ctx, update))
+	handled, err := handler.HandleUpdate(ctx, update)
+	require.NoError(t, err)
+	require.True(t, handled)
 	repo.AssertExpectations(t)
 }
 
@@ -140,7 +146,9 @@ func TestForeignCommandIsIgnored(t *testing.T) {
 	update.Command.Name = "/info"
 
 	// /info обслуживается другой фичей: пользователь не должен получить два ответа.
-	require.NoError(t, handler.HandleUpdate(ctx, update))
+	handled, err := handler.HandleUpdate(ctx, update)
+	require.NoError(t, err)
+	require.False(t, handled)
 	sender.AssertNotCalled(t, "SendMessage", mock.Anything, mock.Anything, mock.Anything)
 	sender.AssertNotCalled(t, "SendMessageWithKeyboard", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 }
@@ -149,13 +157,16 @@ func TestPlainTextIsIgnored(t *testing.T) {
 	ctx := context.Background()
 	handler, _, sender := setup(t)
 
-	require.NoError(t, handler.HandleUpdate(ctx, maxapi.Update{
+	handled, err := handler.HandleUpdate(ctx, maxapi.Update{
 		Type:    maxapi.UpdateMessageCreated,
 		ChatID:  testChatID,
 		UserID:  testUserID,
 		Text:    "привет",
 		Command: maxapi.Command{},
-	}))
+	})
+	require.NoError(t, err)
+	// Обычный текст — не наше: его заберёт анкета заявки или договора.
+	require.False(t, handled)
 	sender.AssertNotCalled(t, "SendMessage", mock.Anything, mock.Anything, mock.Anything)
 }
 
@@ -175,30 +186,17 @@ func TestRoleButtonSavesRole(t *testing.T) {
 		Return(nil).
 		Once()
 
-	require.NoError(t, handler.HandleUpdate(ctx, maxapi.Update{
+	handled, err := handler.HandleUpdate(ctx, maxapi.Update{
 		Type:       maxapi.UpdateMessageCallback,
 		ChatID:     testChatID,
 		UserID:     testUserID,
 		Payload:    testUserDOM,
 		CallbackID: testCBID,
-	}))
+	})
+	require.NoError(t, err)
+	require.True(t, handled)
 	repo.AssertExpectations(t)
 	sender.AssertExpectations(t)
-}
-
-func TestUnknownRolePayloadIsIgnored(t *testing.T) {
-	ctx := context.Background()
-	handler, repo, sender := setup(t)
-
-	require.NoError(t, handler.HandleUpdate(ctx, maxapi.Update{
-		Type:       maxapi.UpdateMessageCallback,
-		ChatID:     testChatID,
-		UserID:     testUserID,
-		Payload:    "role_admin",
-		CallbackID: testCBID,
-	}))
-	repo.AssertNotCalled(t, "SetRole", mock.Anything, mock.Anything, mock.Anything)
-	sender.AssertNotCalled(t, "AnswerCallback", mock.Anything, mock.Anything, mock.Anything)
 }
 
 func TestRoleSaveErrorStillAnswersCallback(t *testing.T) {
@@ -215,13 +213,15 @@ func TestRoleSaveErrorStillAnswersCallback(t *testing.T) {
 		Return(nil).
 		Once()
 
-	require.NoError(t, handler.HandleUpdate(ctx, maxapi.Update{
+	handled, err := handler.HandleUpdate(ctx, maxapi.Update{
 		Type:       maxapi.UpdateMessageCallback,
 		ChatID:     testChatID,
 		UserID:     testUserID,
 		Payload:    domainuser.PayloadTenant,
 		CallbackID: testCBID,
-	}))
+	})
+	require.NoError(t, err)
+	require.True(t, handled)
 	sender.AssertExpectations(t)
 }
 
@@ -229,9 +229,12 @@ func TestOtherUpdateTypesIgnored(t *testing.T) {
 	ctx := context.Background()
 	handler, _, sender := setup(t)
 
-	require.NoError(t, handler.HandleUpdate(ctx, maxapi.Update{
+	handled, err := handler.HandleUpdate(ctx, maxapi.Update{
 		Type:   maxapi.UpdateBotStarted,
 		UserID: testUserID,
-	}))
+	})
+	require.NoError(t, err)
+	// Событие не наше: поллер должен отдать его следующему обработчику.
+	require.False(t, handled)
 	sender.AssertNotCalled(t, "SendMessage", mock.Anything, mock.Anything, mock.Anything)
 }

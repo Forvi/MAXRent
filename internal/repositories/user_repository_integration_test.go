@@ -28,6 +28,12 @@ func TestUserRepositoryIntegration(t *testing.T) {
 
 	ctx := context.Background()
 
+	// Без поднятой БД тест не выполняется: красный набор у того, кто
+	// ещё не запустил docker compose, пользы не приносит.
+	if err := db.PingContext(ctx); err != nil {
+		t.Skipf("database is not reachable: %v", err)
+	}
+
 	// Приводим схему к актуальной: старая таблица от удалённой заглушки мешает.
 	// listings сначала: на users ссылается внешний ключ, иначе DROP не пройдёт.
 	_, err = db.ExecContext(ctx, `DROP TABLE IF EXISTS listings CASCADE`)

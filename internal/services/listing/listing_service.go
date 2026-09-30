@@ -203,6 +203,23 @@ func (s *Service) Join(ctx context.Context, tenantID domainuser.ID, l listing.Li
 	return paired, nil
 }
 
+// IsPaired Сообщает, подключился ли арендатор к заявке.
+//
+// Нужна обработчику, чтобы решить, чьё это сообщение: подключённому арендатору
+// шестизначный код не нужен, его ввод принадлежит анкете договора.
+func (s *Service) IsPaired(ctx context.Context, tenantID domainuser.ID) (bool, error) {
+	found, err := s.repo.FindActiveByTenant(ctx, tenantID)
+	if err != nil {
+		if errors.Is(err, listing.ErrNoActiveListing) {
+			return false, nil
+		}
+
+		return false, fmt.Errorf("find active listing by tenant: %w", err)
+	}
+
+	return found.Status == listing.StatusPaired, nil
+}
+
 // Cancel Отменяет заявку арендодателя.
 func (s *Service) Cancel(ctx context.Context, landlordID domainuser.ID) error {
 	active, err := s.repo.FindActiveByLandlord(ctx, landlordID)

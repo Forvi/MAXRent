@@ -36,6 +36,12 @@ func TestMigrateUpFromScratch(t *testing.T) {
 	t.Cleanup(func() { _ = admin.Close() })
 
 	ctx := t.Context()
+
+	// Без поднятой БД тест не выполняется: красный набор у того, кто
+	// ещё не запустил docker compose, пользы не приносит.
+	if err := admin.PingContext(ctx); err != nil {
+		t.Skipf("database is not reachable: %v", err)
+	}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	migrations := filepath.Join("..", "..", "..", "migrations")
 

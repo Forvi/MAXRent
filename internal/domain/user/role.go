@@ -38,6 +38,14 @@ func NewRole(value string) (Role, error) {
 	return role, nil
 }
 
+// IsRolePayload Сообщает, что payload относится к кнопке выбора роли.
+// Нужен обработчику, чтобы забрать своё событие и не отдать его другим.
+func IsRolePayload(payload string) bool {
+	_, err := RoleFromPayload(payload)
+
+	return err == nil
+}
+
 // RoleFromPayload Разбирает payload нажатой кнопки в роль.
 // Это забота транспорта: сервис работает с готовой Role и о payload не знает.
 func RoleFromPayload(payload string) (Role, error) {
