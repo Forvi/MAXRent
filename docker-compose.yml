@@ -14,24 +14,15 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-maxrent} -d ${DB_NAME:-maxrent}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${DB_USER:-maxrent} -d ${DB_NAME:-maxrent}",
+        ]
       interval: 5s
       timeout: 5s
       retries: 10
       start_period: 5s
-
-  migrate:
-    image: migrate/migrate:v4.18.3
-    container_name: maxrent-migrate
-    depends_on:
-      postgres:
-        condition: service_healthy
-    volumes:
-      - ./migrations:/migrations:ro
-    command:
-      - -path=/migrations
-      - -database=postgres://${DB_USER:-maxrent}:${DB_PASSWORD:-maxrent}@postgres:5432/${DB_NAME:-maxrent}?sslmode=disable
-      - up
 
   bot:
     build:
@@ -44,18 +35,18 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
     environment:
-      APP_ENV: ${APP_ENV:-prod}
+      # APP_ENV намеренно не задаётся здесь: блок environment перебивает env_file,
+      # и значение из .env (dev — цветные логи) доехало бы как prod с JSON-логами.
       APP_LOG_LEVEL: ${APP_LOG_LEVEL:-INFO}
       APP_SHUTDOWN_TIMEOUT: ${APP_SHUTDOWN_TIMEOUT:-15s}
+      APP_AUTO_MIGRATE: ${APP_AUTO_MIGRATE:-true}
       DB_URL: postgres://${DB_USER:-maxrent}:${DB_PASSWORD:-maxrent}@postgres:5432/${DB_NAME:-maxrent}?sslmode=disable
+      DB_MIGRATION_PATH: /app/migrations
       DB_MAX_OPEN_CONNS: ${DB_MAX_OPEN_CONNS:-10}
       DB_MAX_IDLE_CONNS: ${DB_MAX_IDLE_CONNS:-5}
       DB_CONN_MAX_LIFETIME: ${DB_CONN_MAX_LIFETIME:-1h}
       DB_CONN_MAX_IDLE_TIME: ${DB_CONN_MAX_IDLE_TIME:-5m}
-      # BOT_TOKEN и прочие BOT_* приходят из .env через env_file ниже
     env_file:
       - path: .env
         required: false

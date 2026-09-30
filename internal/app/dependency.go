@@ -24,6 +24,14 @@ func BuildApp(ctx context.Context, cfg *config.Config) *App {
 	log := logger.NewLogger(cfg.Logger, cfg.App.Env)
 	log.Info("configuration loaded", "env", cfg.App.Env, "log_level", cfg.Logger.Level)
 
+	// Миграции: до первого обращения к данным.
+	if cfg.App.AutoMigrate {
+		if err := database.MigrateUp(cfg.DB.URL, cfg.DB.MigrationPath, log); err != nil {
+			log.Error("failed to apply migrations", "err", err)
+			exit(log, err)
+		}
+	}
+
 	// Клиент бота
 	botClient, err := bot.NewClient(ctx, cfg.Bot, log)
 	if err != nil {
@@ -34,7 +42,7 @@ func BuildApp(ctx context.Context, cfg *config.Config) *App {
 	// База данных
 	db := database.ConnectMust(ctx, cfg.DB, log)
 
-	// Фичи: user (регистрация и роль), listing (заявка и подключение), info
+	// 5. Фичи: user (регистрация и роль), listing (заявка и подключение), info
 	userRepo := repositories.NewUserRepositoryAdapter(db, log)
 	userService := userservice.NewService(userRepo, log)
 
@@ -47,7 +55,7 @@ func BuildApp(ctx context.Context, cfg *config.Config) *App {
 		info.NewInfoHandler(botClient, log),
 	}
 
-	// Цикл long polling
+	// 6. Цикл long polling
 	poller := bot.NewPoller(botClient, log, handlers...)
 
 	return &App{

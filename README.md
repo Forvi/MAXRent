@@ -45,17 +45,61 @@ migrations/                         *.up.sql / *.down.sql
 ## Быстрый старт
 
 ```bash
-cp .env.example .env      # при необходимости поправить значения
-make up                   # postgres + миграции + бот в docker
+cp .env.example .env      # вписать BOT_TOKEN
+make up                   # postgres + бот в docker
 ```
 
-Локально, без docker:
+Миграции бот накатывает сам при старте — отдельный сервис не нужен.
+Если нужна чистая база с нуля:
+
+```bash
+docker compose down -v   # удалить volume с базой
+make up
+```
+
+Локально, без сборки контейнера с ботом:
 
 ```bash
 docker compose up -d postgres
-make migrate              # применить миграции
-make run
+make run                  # миграции применятся автоматически
 ```
+
+## Миграции
+
+Файлы лежат в `migrations/`, применяются при старте приложения
+(`APP_AUTO_MIGRATE=true` по умолчанию). Перед первым обращением к данным
+последовательно выполняются `*.up.sql`.
+
+На проде с несколькими репликами автозапуск выключают
+(`APP_AUTO_MIGRATE=false`) — иначе миграции будут гнать все инстансы сразу.
+
+Для ручных операций нужен CLI. Он собирается с тегами драйверов, иначе
+не будет работать ни одна схема подключения:
+
+```bash
+make install-tools       # go install -tags 'pgx5 file' .../cmd/migrate@latest
+make migrate-status
+make migrate-down
+make migrate-create name=add_orders
+```
+
+Схема подключения для CLI — `pgx5://` (драйвер на pgx). Приложение при этом
+ходит к базе через `postgres://`, это разные схемы для разных драйверов.
+
+### Сертификаты
+
+API MAX работает по TLS с цепочкой от российского удостоверяющего центра
+(`Russian Trusted Sub CA`). В стандартном бандле alpine этого корня нет,
+поэтому без него бот падает при старте с `x509: certificate signed by
+unknown authority` и уходит в бесконечный рестарт — снаружи это выглядит
+как «контейнер запустился, но не отвечает».
+
+Корень лежит в `deploy/certs/russian_trusted_root.crt` и ставится в образ
+через `update-ca-certificates`. Промежуточный Sub CA в образ не нужен: он
+приходит в цепочке с сервера.
+
+На локальной машине для `go run` нужен системный сертификат
+(`ca-certificates-russian` в Arch/CachyOS).
 
 ## Команды
 
@@ -66,7 +110,8 @@ make test            # тесты с -race
 make cover           # покрытие
 make lint            # golangci-lint
 make mockery         # перегенерация моков
-make migrate         # применить миграции
+make install-tools   # CLI миграций с драйвером pgx5 (нужен один раз)
+make migrate-status  # текущая версия схемы
 make migrate-down    # откатить последнюю миграцию
 make migrate-create name=add_orders
 ```
@@ -84,6 +129,8 @@ make migrate-create name=add_orders
 | `DB_CONN_MAX_LIFETIME`  | `1h`                                      | максимум жизни соединения        |
 | `DB_CONN_MAX_IDLE_TIME` | `5m`                                      | максимум простоя соединения      |
 | `DB_PING_TIMEOUT`       | `5s`                                      | таймаут проверки БД при старте    |
+| `DB_MIGRATION_PATH`     | `./migrations`                            | каталог файлов миграций          |
+| `APP_AUTO_MIGRATE`      | `true`                                    | накатывать миграции при старте   |
 | `BOT_TOKEN`             | — (обязателен)                            | токен бота от MasterBot          |
 | `BOT_REQUEST_TIMEOUT`   | `10s`                                     | таймаут HTTP-запроса к API       |
 | `BOT_POLLING_TIMEOUT`   | `30s`                                     | таймаут long polling             |
@@ -109,7 +156,7 @@ make migrate-create name=add_orders
    попадает в цикл long polling.
 7. Собрать цепочку адаптер -> юзкейс -> обработчик в `internal/app/dependency.go` и добавить
    обработчик в срез `bot.Handler`.
-8. Добавить миграцию и применить `make migrate`.
+8. Добавить миграцию в `migrations/` — она применится при следующем старте.
 
 ## Как устроен бот
 

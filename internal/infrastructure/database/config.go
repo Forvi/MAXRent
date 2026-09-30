@@ -22,6 +22,8 @@ type Config struct {
 	ConnMaxIdleTime time.Duration `env:"CONN_MAX_IDLE_TIME" envDefault:"5m"`
 	// PingTimeout таймаут проверки доступности БД при старте.
 	PingTimeout time.Duration `env:"PING_TIMEOUT" envDefault:"5s"`
+	// MigrationPath каталог с файлами миграций.
+	MigrationPath string `env:"MIGRATION_PATH" envDefault:"./migrations"`
 }
 
 // LoadConfig читает конфигурацию БД из переменных окружения с префиксом DB_.

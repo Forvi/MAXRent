@@ -29,6 +29,10 @@ type AppConfig struct {
 	Env string `env:"ENV" envDefault:"dev"`
 	// ShutdownTimeout таймаут graceful shutdown.
 	ShutdownTimeout time.Duration `env:"SHUTDOWN_TIMEOUT" envDefault:"15s"`
+	// AutoMigrate накатывать миграции при старте.
+	// На проде с несколькими репликами выключают: гонять миграции
+	// из всех инстансов одновременно нельзя.
+	AutoMigrate bool `env:"AUTO_MIGRATE" envDefault:"true"`
 }
 
 // Load Загружает .env (если файл есть) и читает конфигурацию приложения.

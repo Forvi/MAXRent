@@ -1,3 +1,4 @@
+-- +migrate Up
 CREATE TABLE IF NOT EXISTS users (
     id         BIGINT PRIMARY KEY,
     role       VARCHAR(16),

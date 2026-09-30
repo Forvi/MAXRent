@@ -6,14 +6,17 @@ endif
 BUILD_DIR := build
 TARGET := app
 GO_MAIN := ./cmd/bot/main.go
+# Схема pgx5 обязательна: драйвер golang-migrate зарегистрирован под ней,
+# а postgres:// — это схема другого драйвера, на lib/pq.
+# Приложение при этом ходит к БД через postgres:// (pgx stdlib).
+MIGRATE_URL ?= pgx5://maxrent:maxrent@localhost:5432/maxrent?sslmode=disable
 MIGRATION_PATH ?= ./migrations
-DB_URL ?= postgres://maxrent:maxrent@localhost:5432/maxrent?sslmode=disable
 BUILD_TIME := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS := -ldflags "-s -w -X main.BuildTime=$(BUILD_TIME)"
 
 .DEFAULT_GOAL := help
 
-.PHONY: help build run test test-race cover lint fmt mockery migrate migrate-down migrate-create migrate-status up down logs ps clean tidy
+.PHONY: help build run test test-race cover lint fmt mockery migrate migrate-down migrate-create migrate-status install-tools up down logs ps clean tidy
 
 help: ## Список доступных команд
 	@echo "Доступные команды:"
@@ -45,17 +48,20 @@ mockery: ## Генерация моков для портов
 	mockery
 
 migrate: ## Применить миграции
-	migrate -path $(MIGRATION_PATH) -database "$(DB_URL)" up
+	migrate -path $(MIGRATION_PATH) -database "$(MIGRATE_URL)" up
 
 migrate-down: ## Откатить последнюю миграцию
-	migrate -path $(MIGRATION_PATH) -database "$(DB_URL)" down 1
+	migrate -path $(MIGRATION_PATH) -database "$(MIGRATE_URL)" down 1
 
 migrate-create: ## Создать миграцию
 	@test -n "$(name)" || (echo "Укажите имя: make migrate-create name=add_users" && exit 1)
 	migrate create -ext sql -dir $(MIGRATION_PATH) -seq $(name)
 
 migrate-status: ## Статус миграций
-	migrate -path $(MIGRATION_PATH) -database "$(DB_URL)" version
+	migrate -path $(MIGRATION_PATH) -database "$(MIGRATE_URL)" version
+
+install-tools: ## Установить CLI миграций с драйвером pgx5
+	go install -tags 'pgx5 file' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
 
 clean: ## Удалить артефакты сборки
 	rm -rf $(BUILD_DIR) coverage.out
