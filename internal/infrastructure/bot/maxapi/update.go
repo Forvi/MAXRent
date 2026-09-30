@@ -36,6 +36,8 @@ type Update struct {
 	Command Command
 	// Payload полезная нагрузка inline-кнопки.
 	Payload string
+	// CallbackID идентификатор нажатия, нужен для ответа на кнопку.
+	CallbackID string
 }
 
 // Command Разобранная команда из текста сообщения.
@@ -72,6 +74,7 @@ func FromModelUpdate(u model.Update) Update {
 
 	if u.Callback != nil {
 		converted.Payload = u.Callback.Payload
+		converted.CallbackID = u.Callback.CallbackID
 	}
 
 	return converted

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	maxbot "github.com/max-messenger/max-bot-api-client-go/v2"
+	"github.com/max-messenger/max-bot-api-client-go/v2/model"
 
 	"github.com/Forvi/maxrent/internal/infrastructure/bot/maxapi"
 )
@@ -93,6 +94,35 @@ func (c *Client) SendMessage(ctx context.Context, chatID int64, text string) err
 	if _, err := c.api.Messages.Send(ctx, msg); err != nil {
 		return fmt.Errorf("send message to chat %d: %w", chatID, err)
 	}
+	return nil
+}
+
+// SendMessageWithKeyboard Отправляет сообщение с инлайн-клавиатурой.
+func (c *Client) SendMessageWithKeyboard(
+	ctx context.Context,
+	chatID int64,
+	text string,
+	kb *maxapi.Keyboard,
+) error {
+	msg := maxbot.NewMessage().SetChat(chatID).SetText(text)
+	if kb != nil && !kb.IsEmpty() {
+		msg.AddKeyboard(kb.ToModel())
+	}
+
+	if _, err := c.api.Messages.Send(ctx, msg); err != nil {
+		return fmt.Errorf("send message with keyboard to chat %d: %w", chatID, err)
+	}
+
+	return nil
+}
+
+// AnswerCallback Подтверждает нажатие на кнопку и убирает индикатор ожидания.
+func (c *Client) AnswerCallback(ctx context.Context, callbackID, text string) error {
+	answer := model.CallbackAnswer{Message: &model.NewMessageBody{Text: text}}
+	if _, err := c.api.Messages.AnswerOnCallback(ctx, callbackID, answer); err != nil {
+		return fmt.Errorf("answer callback %s: %w", callbackID, err)
+	}
+
 	return nil
 }
 

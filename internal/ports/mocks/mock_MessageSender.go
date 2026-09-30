@@ -5,6 +5,7 @@ package mocks
 import (
 	context "context"
 
+	maxapi "github.com/Forvi/maxrent/internal/infrastructure/bot/maxapi"
 	mock "github.com/stretchr/testify/mock"
 )
 
@@ -19,6 +20,54 @@ type MockMessageSender_Expecter struct {
 
 func (_m *MockMessageSender) EXPECT() *MockMessageSender_Expecter {
 	return &MockMessageSender_Expecter{mock: &_m.Mock}
+}
+
+// AnswerCallback provides a mock function with given fields: ctx, callbackID, text
+func (_m *MockMessageSender) AnswerCallback(ctx context.Context, callbackID string, text string) error {
+	ret := _m.Called(ctx, callbackID, text)
+
+	if len(ret) == 0 {
+		panic("no return value specified for AnswerCallback")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) error); ok {
+		r0 = rf(ctx, callbackID, text)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockMessageSender_AnswerCallback_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'AnswerCallback'
+type MockMessageSender_AnswerCallback_Call struct {
+	*mock.Call
+}
+
+// AnswerCallback is a helper method to define mock.On call
+//   - ctx context.Context
+//   - callbackID string
+//   - text string
+func (_e *MockMessageSender_Expecter) AnswerCallback(ctx interface{}, callbackID interface{}, text interface{}) *MockMessageSender_AnswerCallback_Call {
+	return &MockMessageSender_AnswerCallback_Call{Call: _e.mock.On("AnswerCallback", ctx, callbackID, text)}
+}
+
+func (_c *MockMessageSender_AnswerCallback_Call) Run(run func(ctx context.Context, callbackID string, text string)) *MockMessageSender_AnswerCallback_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(string))
+	})
+	return _c
+}
+
+func (_c *MockMessageSender_AnswerCallback_Call) Return(_a0 error) *MockMessageSender_AnswerCallback_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockMessageSender_AnswerCallback_Call) RunAndReturn(run func(context.Context, string, string) error) *MockMessageSender_AnswerCallback_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // SendMessage provides a mock function with given fields: ctx, chatID, text
@@ -65,6 +114,55 @@ func (_c *MockMessageSender_SendMessage_Call) Return(_a0 error) *MockMessageSend
 }
 
 func (_c *MockMessageSender_SendMessage_Call) RunAndReturn(run func(context.Context, int64, string) error) *MockMessageSender_SendMessage_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SendMessageWithKeyboard provides a mock function with given fields: ctx, chatID, text, kb
+func (_m *MockMessageSender) SendMessageWithKeyboard(ctx context.Context, chatID int64, text string, kb *maxapi.Keyboard) error {
+	ret := _m.Called(ctx, chatID, text, kb)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SendMessageWithKeyboard")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, int64, string, *maxapi.Keyboard) error); ok {
+		r0 = rf(ctx, chatID, text, kb)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockMessageSender_SendMessageWithKeyboard_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SendMessageWithKeyboard'
+type MockMessageSender_SendMessageWithKeyboard_Call struct {
+	*mock.Call
+}
+
+// SendMessageWithKeyboard is a helper method to define mock.On call
+//   - ctx context.Context
+//   - chatID int64
+//   - text string
+//   - kb *maxapi.Keyboard
+func (_e *MockMessageSender_Expecter) SendMessageWithKeyboard(ctx interface{}, chatID interface{}, text interface{}, kb interface{}) *MockMessageSender_SendMessageWithKeyboard_Call {
+	return &MockMessageSender_SendMessageWithKeyboard_Call{Call: _e.mock.On("SendMessageWithKeyboard", ctx, chatID, text, kb)}
+}
+
+func (_c *MockMessageSender_SendMessageWithKeyboard_Call) Run(run func(ctx context.Context, chatID int64, text string, kb *maxapi.Keyboard)) *MockMessageSender_SendMessageWithKeyboard_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(int64), args[2].(string), args[3].(*maxapi.Keyboard))
+	})
+	return _c
+}
+
+func (_c *MockMessageSender_SendMessageWithKeyboard_Call) Return(_a0 error) *MockMessageSender_SendMessageWithKeyboard_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockMessageSender_SendMessageWithKeyboard_Call) RunAndReturn(run func(context.Context, int64, string, *maxapi.Keyboard) error) *MockMessageSender_SendMessageWithKeyboard_Call {
 	_c.Call.Return(run)
 	return _c
 }
