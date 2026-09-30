@@ -29,7 +29,11 @@ func TestUserRepositoryIntegration(t *testing.T) {
 	ctx := context.Background()
 
 	// Приводим схему к актуальной: старая таблица от удалённой заглушки мешает.
-	_, err = db.ExecContext(ctx, `DROP TABLE IF EXISTS users`)
+	// listings сначала: на users ссылается внешний ключ, иначе DROP не пройдёт.
+	_, err = db.ExecContext(ctx, `DROP TABLE IF EXISTS listings CASCADE`)
+	require.NoError(t, err)
+
+	_, err = db.ExecContext(ctx, `DROP TABLE IF EXISTS users CASCADE`)
 	require.NoError(t, err)
 
 	_, err = db.ExecContext(ctx, `

@@ -167,9 +167,10 @@ func TestRoleButtonSavesRole(t *testing.T) {
 	repo.EXPECT().FindByID(ctx, id).Return(domainuser.User{}, domainuser.ErrNotFound).Once()
 	repo.EXPECT().Create(ctx, mock.Anything).Return(nil).Once()
 	repo.EXPECT().SetRole(ctx, id, domainuser.RoleTenant).Return(nil).Once()
+	// Подсказка следующего шага зависит от роли: арендатор ищет заявку по коду.
 	sender.EXPECT().
 		AnswerCallback(ctx, testCBID, mock.MatchedBy(func(text string) bool {
-			return strings.Contains(text, "Арендатор")
+			return strings.Contains(text, "код заявки")
 		})).
 		Return(nil).
 		Once()

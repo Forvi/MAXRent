@@ -7,12 +7,14 @@ import (
 	"os"
 
 	"github.com/Forvi/maxrent/internal/handlers/info"
+	listinghandlers "github.com/Forvi/maxrent/internal/handlers/listing"
 	userhandlers "github.com/Forvi/maxrent/internal/handlers/user"
 	"github.com/Forvi/maxrent/internal/infrastructure/bot"
 	"github.com/Forvi/maxrent/internal/infrastructure/config"
 	"github.com/Forvi/maxrent/internal/infrastructure/database"
 	"github.com/Forvi/maxrent/internal/infrastructure/logger"
 	"github.com/Forvi/maxrent/internal/repositories"
+	listingservice "github.com/Forvi/maxrent/internal/services/listing"
 	userservice "github.com/Forvi/maxrent/internal/services/user"
 )
 
@@ -32,11 +34,16 @@ func BuildApp(ctx context.Context, cfg *config.Config) *App {
 	// База данных
 	db := database.ConnectMust(ctx, cfg.DB, log)
 
-	// Фичи: user (регистрация и выбор роли) и info (описание сервиса)
+	// Фичи: user (регистрация и роль), listing (заявка и подключение), info
 	userRepo := repositories.NewUserRepositoryAdapter(db, log)
 	userService := userservice.NewService(userRepo, log)
+
+	listingRepo := repositories.NewListingRepositoryAdapter(db, log)
+	listingService := listingservice.NewService(listingRepo, log)
+
 	handlers := []bot.Handler{
 		userhandlers.NewUserHandler(userService, botClient, log),
+		listinghandlers.NewListingHandler(listingService, userService, botClient, log),
 		info.NewInfoHandler(botClient, log),
 	}
 

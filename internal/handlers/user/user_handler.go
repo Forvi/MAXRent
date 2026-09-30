@@ -15,11 +15,24 @@ import (
 
 // Тексты диалога регистрации.
 const (
-	askRoleText   = "Кто вы?"
-	roleSavedText = "Принято: вы %s. Дальше подскажу, что нужно для оформления договора."
-	alreadyKnown  = "Вы уже зарегистрированы как %s. Продолжаем оформление."
-	genericError  = "Что-то пошло не так, попробуйте /start ещё раз."
+	askRoleText  = "Кто вы?"
+	alreadyKnown = "Вы уже зарегистрированы как %s. Продолжаем оформление."
+	genericError = "Что-то пошло не так, попробуйте /start ещё раз."
+
+	// nextStepLandlord подсказывает арендодателю первый шаг его сценария.
+	nextStepLandlord = "Принято: вы арендодатель.\nСоздать заявку можно командой /list — отвечайте по шагам."
+	// nextStepTenant подсказывает арендатору, что делать: искать заявку по коду.
+	nextStepTenant = "Принято: вы арендатор.\nОтправьте код заявки арендодателя — 6 цифр."
 )
+
+// nextStepByRole Текст следующего шага в зависимости от выбранной роли.
+func nextStepByRole(role domainuser.Role) string {
+	if role == domainuser.RoleLandlord {
+		return nextStepLandlord
+	}
+
+	return nextStepTenant
+}
 
 // UserHandler Обрабатывает /start и нажатия кнопок выбора роли.
 type UserHandler struct {
@@ -120,7 +133,7 @@ func (h *UserHandler) handleRoleChoice(ctx context.Context, update maxapi.Update
 		return nil
 	}
 
-	confirmation := fmt.Sprintf(roleSavedText, updated.RoleTitle())
+	confirmation := nextStepByRole(*updated.Role)
 	if err := h.sender.AnswerCallback(ctx, update.CallbackID, confirmation); err != nil {
 		h.logger.ErrorContext(ctx, "failed to answer callback", "err", err, "user_id", update.UserID)
 	}
